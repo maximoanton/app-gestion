@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestión Integral Figallo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div>
+      <h1>Gestión Integral Figallo</h1>
+      <p class="subtitle">Movimientos, balance, bienes y deudas de tus negocios</p>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="btn-ghost" id="settingsBtn" title="Configurar clave de la API de Anthropic (para la transcripción con IA)">⚙ Configuración</button>
+      <button class="btn-export" id="exportBtn" disabled>Exportar a Excel ⤓</button>
+    </div>
+  </div>
+
+  <div id="banner-slot"></div>
+
+  <div class="tabsrow">
+    <nav class="tabs" id="negocioTabs"></nav>
+    <button class="tab-add" id="addNegocioBtn" title="Agregar negocio">+</button>
+    <button class="manage-link" id="manageNegociosBtn">Gestionar</button>
+  </div>
+
+  <div class="tabsrow" id="mesTabsRow">
+    <nav class="tabs" id="mesTabs"></nav>
+    <button class="tab-add" id="addMesBtn" title="Ir a un mes">+</button>
+  </div>
+
+  <div class="viewrow" id="viewSwitcher">
+    <button class="viewtab active" data-view="general">Visión general</button>
+    <button class="viewtab" data-view="bienes">Bienes de uso</button>
+    <button class="viewtab" data-view="deudas">Deudas</button>
+    <button class="viewtab" data-view="presupuesto">Presupuesto</button>
+    <button class="viewtab" data-view="fijos">Fijos</button>
+    <button class="viewtab" data-view="cierre">Cierre diario</button>
+  </div>
+
+  <!-- ===== stats (one block per view, values filled by JS) ===== -->
+  <section class="stats" id="statsMovimientos">
+    <div class="stat stat--pos"><span class="stat-label">Ingresos</span><span class="stat-value" id="statIngresos">$0</span></div>
+    <div class="stat stat--neg"><span class="stat-label">Egresos</span><span class="stat-value" id="statEgresos">$0</span></div>
+    <div class="stat" id="statNetoBox"><span class="stat-label">Neto</span><span class="stat-value" id="statNeto">$0</span></div>
+  </section>
+  <section class="stats" id="statsBalance">
+    <div class="stat stat--neutral"><span class="stat-label">Activo</span><span class="stat-value" id="statActivo">$0</span></div>
+    <div class="stat stat--neutral"><span class="stat-label">Pasivo</span><span class="stat-value" id="statPasivo">$0</span></div>
+    <div class="stat" id="statPatrimonioBox"><span class="stat-label">Patrimonio neto</span><span class="stat-value" id="statPatrimonio">$0</span></div>
+  </section>
+  <section class="stats hidden" id="statsFijos">
+    <div class="stat stat--pos"><span class="stat-label">Ingresos fijos</span><span class="stat-value" id="statFijosIngresos">$0</span></div>
+    <div class="stat stat--neg"><span class="stat-label">Costos fijos</span><span class="stat-value" id="statFijosEgresos">$0</span></div>
+    <div class="stat" id="statFijosNetoBox"><span class="stat-label">Neto fijo mensual</span><span class="stat-value" id="statFijosNeto">$0</span></div>
+  </section>
+  <section class="stats hidden" id="statsBienes">
+    <div class="stat stat--neutral"><span class="stat-label">Valor de origen</span><span class="stat-value" id="statBienOrigen">$0</span></div>
+    <div class="stat stat--neg"><span class="stat-label">Amortización acumulada</span><span class="stat-value" id="statBienAmort">$0</span></div>
+    <div class="stat stat--pos"><span class="stat-label">Valor residual</span><span class="stat-value" id="statBienResidual">$0</span></div>
+  </section>
+  <section class="stats hidden" id="statsDeudas">
+    <div class="stat stat--neg"><span class="stat-label">Debemos</span><span class="stat-value" id="statDeudaDebemos">$0</span></div>
+    <div class="stat stat--pos"><span class="stat-label">Nos deben</span><span class="stat-value" id="statDeudaNosDeben">$0</span></div>
+    <div class="stat" id="statDeudaDifBox"><span class="stat-label">Diferencia</span><span class="stat-value" id="statDeudaDif">$0</span></div>
+  </section>
+  <section class="stats hidden" id="statsPresupuesto">
+    <div class="stat stat--neutral"><span class="stat-label">Resultado presupuestado</span><span class="stat-value" id="statPresupResultado">$0</span></div>
+    <div class="stat stat--neutral"><span class="stat-label">Resultado real</span><span class="stat-value" id="statPresupReal">$0</span></div>
+    <div class="stat" id="statPresupDifBox"><span class="stat-label">Diferencia</span><span class="stat-value" id="statPresupDif">$0</span></div>
+  </section>
+
+  <!-- ===== panel: visión general (movimientos + balance + dashboard) ===== -->
+  <div class="view-panel" id="panel-general">
+    <div class="addcard">
+      <h2>Agregar movimiento <span id="hintMesActivo" style="font-weight:400; text-transform:none; color:var(--ink-soft);"></span></h2>
+      <form id="movForm">
+        <div class="addgrid g7">
+          <div class="field"><label for="f_fecha">Fecha</label><input type="date" id="f_fecha"></div>
+          <div class="field">
+            <label for="f_concepto">Concepto</label>
+            <select id="f_concepto" required></select>
+            <input type="text" id="f_concepto_nueva" class="newcat-input" placeholder="Nombre del nuevo concepto">
+          </div>
+          <div class="field"><label for="f_notas">Notas</label><input type="text" id="f_notas" placeholder="Opcional"></div>
+          <div class="field"><label for="f_monto">Monto</label><input type="number" id="f_monto" min="0" step="1" required placeholder="0"></div>
+          <div class="field"><label for="f_tipo">Tipo</label>
+            <select id="f_tipo"><option value="Ingreso">Ingreso</option><option value="Egreso" selected>Egreso</option></select>
+          </div>
+          <div class="field"><label for="f_negocio">Negocio</label><select id="f_negocio"></select></div>
+          <div class="field">
+            <label for="f_categoria">Categoría</label>
+            <select id="f_categoria"></select>
+            <input type="text" id="f_categoria_nueva" class="newcat-input" placeholder="Nombre de la nueva categoría">
+          </div>
+          <div class="addbtn-row"><button type="submit" class="btn-primary">Agregar línea</button></div>
+        </div>
+      </form>
+    </div>
+    <div class="toolbar">
+      <div class="groupby">
+        Agrupar por:
+        <button class="chip" data-group="concepto">Concepto</button>
+        <button class="chip active" data-group="categoria">Categoría</button>
+        <button class="chip" data-group="negocio">Negocio</button>
+      </div>
+      <input type="search" id="searchBox" placeholder="Buscar concepto o nota…">
+    </div>
+    <main id="listMovimientos"><div class="empty">Cargando movimientos…</div></main>
+
+    <h2 class="section-divider">Balance</h2>
+    <div id="balanceContent"><div class="empty">Cargando balance…</div></div>
+
+    <h2 class="section-divider">Dashboard</h2>
+    <div id="dashboardContent"><div class="empty">Cargando dashboard…</div></div>
+  </div>
+
+  <!-- ===== panel: bienes de uso ===== -->
+  <div class="view-panel hidden" id="panel-bienes">
+    <div class="addcard">
+      <h2>Agregar bien de uso</h2>
+      <form id="bienForm">
+        <div class="addgrid g6">
+          <div class="field"><label for="b_nombre">Nombre</label><input type="text" id="b_nombre" required placeholder="Ej: Mesas y sillas"></div>
+          <div class="field"><label for="b_categoria">Categoría</label>
+            <select id="b_categoria">
+              <option>Instalaciones</option><option>Muebles y útiles</option>
+              <option>Equipamiento</option><option>Rodados</option><option>Otros</option>
+            </select>
+          </div>
+          <div class="field"><label for="b_negocio">Negocio</label><select id="b_negocio"></select></div>
+          <div class="field"><label for="b_valor">Valor de origen</label><input type="number" id="b_valor" min="0" step="1" required placeholder="0"></div>
+          <div class="field"><label for="b_fecha">Fecha de alta</label><input type="date" id="b_fecha"></div>
+          <div class="field"><label for="b_vida">Vida útil (años)</label><input type="number" id="b_vida" min="1" step="1" value="10"></div>
+          <div class="addbtn-row"><button type="submit" class="btn-primary">Agregar bien</button></div>
+        </div>
+      </form>
+    </div>
+    <main id="listBienes"><div class="empty">Cargando bienes de uso…</div></main>
+  </div>
+
+  <!-- ===== panel: deudas ===== -->
+  <div class="view-panel hidden" id="panel-deudas">
+    <div class="addcard">
+      <h2>Agregar deuda / cuenta pendiente</h2>
+      <form id="deudaForm">
+        <div class="addgrid gauto">
+          <div class="field"><label for="dd_concepto">Acreedor / concepto</label><input type="text" id="dd_concepto" required placeholder="Ej: Toto"></div>
+          <div class="field"><label for="dd_negocio">Negocio</label><select id="dd_negocio"></select></div>
+          <div class="field"><label for="dd_tipo">Tipo</label>
+            <select id="dd_tipo"><option value="Debemos">Debemos</option><option value="Nos deben">Nos deben</option></select>
+          </div>
+          <div class="field"><label for="dd_total">Monto total</label><input type="number" id="dd_total" min="0" step="1" required placeholder="0"></div>
+          <div class="field"><label for="dd_pagado">Pagado hasta ahora</label><input type="number" id="dd_pagado" min="0" step="1" value="0"></div>
+          <div class="field"><label for="dd_vencimiento">Vencimiento</label><input type="date" id="dd_vencimiento"></div>
+          <div class="field"><label for="dd_tasa_comp">Tasa compensatoria (TNA %)</label><input type="number" id="dd_tasa_comp" min="0" step="0.1" value="0" title="La tasa normal, mientras la deuda está en término"></div>
+          <div class="field"><label for="dd_tasa_pun">Tasa punitoria (TNA %)</label><input type="number" id="dd_tasa_pun" min="0" step="0.1" value="0" title="La tasa que se aplica solo si se pasó el vencimiento"></div>
+          <div class="addbtn-row"><button type="submit" class="btn-primary">Agregar</button></div>
+        </div>
+      </form>
+    </div>
+    <div id="ordenPagoDeudas"></div>
+    <main id="listDeudas"><div class="empty">Cargando deudas…</div></main>
+  </div>
+
+  <!-- ===== panel: presupuesto ===== -->
+  <div class="view-panel hidden" id="panel-presupuesto">
+    <div id="presupuestoContent"><div class="empty">Cargando presupuesto…</div></div>
+  </div>
+
+  <!-- ===== panel: ingresos y costos fijos ===== -->
+  <div class="view-panel hidden" id="panel-fijos">
+    <div class="addcard">
+      <h2>Agregar ingreso o costo fijo</h2>
+      <form id="fijoForm">
+        <div class="addgrid gauto">
+          <div class="field"><label for="fj_nombre">Nombre</label><input type="text" id="fj_nombre" required placeholder="Ej: Alquiler"></div>
+          <div class="field"><label for="fj_tipo">Tipo</label>
+            <select id="fj_tipo"><option value="Ingreso">Ingreso</option><option value="Egreso" selected>Egreso</option></select>
+          </div>
+          <div class="field"><label for="fj_negocio">Negocio</label><select id="fj_negocio"></select></div>
+          <div class="field">
+            <label for="fj_categoria">Categoría</label>
+            <select id="fj_categoria"></select>
+            <input type="text" id="fj_categoria_nueva" class="newcat-input" placeholder="Nombre de la nueva categoría">
+          </div>
+          <div class="field"><label for="fj_monto">Monto</label><input type="number" id="fj_monto" min="0" step="1" required placeholder="0"></div>
+          <div class="addbtn-row"><button type="submit" class="btn-primary">Agregar fijo</button></div>
+        </div>
+      </form>
+    </div>
+    <div class="toolbar" id="fijosAplicarRow">
+      <span id="fijosAplicarLabel" class="pres-note" style="margin:0;"></span>
+      <button class="btn-primary" id="fijosAplicarBtn" type="button">Aplicar este mes</button>
+    </div>
+    <main id="listFijos"><div class="empty">Cargando fijos…</div></main>
+  </div>
+
+  <!-- ===== panel: cierre diario ===== -->
+  <div class="view-panel hidden" id="panel-cierre">
+    <div class="addcard">
+      <h2>Sabor de Casa — Cierre de caja</h2>
+      <div class="addgrid gauto">
+        <div class="field"><label for="cd_fecha">Fecha</label><input type="date" id="cd_fecha"></div>
+        <div class="field"><label for="cd_turno">Turno</label><select id="cd_turno"><option value="manana">Mañana</option><option value="tarde">Tarde</option></select></div>
+        <div class="addbtn-row" style="grid-column:auto;"><button type="button" class="btn-primary" id="cd_abrir">Abrir / nuevo cierre</button></div>
+      </div>
+    </div>
+    <div id="cierreWorkArea" class="hidden">
+      <div class="addcard" id="cd_cargaCard">
+        <h2 id="cd_tituloCarga">Cargar planilla</h2>
+        <div id="cd_uploaders"></div>
+        <p class="pres-note">También podés pegar el texto si alguien lo dictó, en vez de subir fotos.</p>
+        <textarea id="cd_texto_dictado" placeholder="Texto dictado (opcional, en vez de fotos)…" style="width:100%; min-height:70px; padding:8px; border:1px solid var(--line); border-radius:7px; background:var(--paper); color:var(--ink); font-family:inherit; font-size:13px;"></textarea>
+        <div class="addbtn-row"><button type="button" class="btn-primary" id="cd_transcribir">Transcribir con Claude</button></div>
+        <div id="cd_status"></div>
+      </div>
+      <div id="cd_revision"></div>
+      <div id="cd_arqueoBox"></div>
+    </div>
+    <div class="dash-heading" style="margin-top:30px;">Informe mensual — Sabor de Casa</div>
+    <div id="cd_informe"></div>
+  </div>
+
+  <footer class="note">Los montos con ⚠ vienen con alguna duda del registro original. El Balance es una aproximación: la Caja surge de acumular todos los movimientos de cada negocio, y los Bienes de uso se amortizan en línea recta según la vida útil que cargues. Los cambios se guardan solos.</footer>
+
+</div>
+<div class="toast" id="toast"></div>
+<div class="modal-overlay hidden" id="modalOverlay"><div class="modal-card" id="modalCard"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="js/00-data.js"></script>
+<script src="js/01-local-backend.js"></script>
+<script src="js/02-helpers.js"></script>
+<script src="js/03-amortizacion.js"></script>
+<script src="js/04-balance.js"></script>
+<script src="js/05-selects.js"></script>
+<script src="js/06-view-movimientos.js"></script>
+<script src="js/07-view-bienes.js"></script>
+<script src="js/08-view-deudas.js"></script>
+<script src="js/09-view-balance.js"></script>
+<script src="js/10-view-presupuesto.js"></script>
+<script src="js/11-view-fijos.js"></script>
+<script src="js/12-dashboard.js"></script>
+<script src="js/13-cierre-diario.js"></script>
+<script src="js/14-render.js"></script>
+<script src="js/15-db.js"></script>
+<script src="js/16-modal.js"></script>
+<script src="js/17-settings.js"></script>
+<script src="js/18-forms.js"></script>
+<script src="js/19-export.js"></script>
+<script src="js/20-boot.js"></script>
+</body>
+</html>
